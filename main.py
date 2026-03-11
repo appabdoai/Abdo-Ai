@@ -12,61 +12,59 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'your-secret-key-here'
-app.config['PERMANENT_SESSION_LIFETIME'] = 3600 * 24 * 7  # أسبوع
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600 * 24 * 7  # week
 
-# إعدادات NVIDIA API مع OpenAI client
+# NVIDIA API setup with OpenAI client
 client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
     api_key="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"
 )
 
-# نموذج Kimi K2 Thinking
+# Kimi K2 Thinking model
 MODEL_NAME = "moonshotai/kimi-k2-thinking"
 
-# تخزين المحادثات (في الإنتاج استخدم قاعدة بيانات)
+# Store conversations (in production use database)
 conversations = {}
 
 def optimize_code_response(content):
-    """تحسين عرض الأكواد البرمجية"""
-    # اكتشاف كتل الأكواد وتحسين تنسيقها
+    """Optimize code display"""
     def replace_code_block(match):
         lang = match.group(1) or 'text'
         code = match.group(2)
-        return f'<div class="code-block-wrapper"><div class="code-header"><span class="code-language">{lang}</span><button class="copy-code-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i> نسخ</button></div><pre><code class="language-{lang}">{code}</code></pre></div>'
+        return f'<div class="code-block-wrapper"><div class="code-header"><span class="code-language">{lang}</span><button class="copy-code-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i> Copy</button></div><pre><code class="language-{lang}">{code}</code></pre></div>'
     
-    # تحسين الأكواد المضمنة
+    # Inline code
     content = re.sub(r'`([^`]+)`', r'<code class="inline-code">\1</code>', content)
     
-    # تحسين كتل الأكواد
+    # Code blocks
     content = re.sub(r'```(\w*)\n(.*?)```', replace_code_block, content, flags=re.DOTALL)
     
     return content
 
 def generate_stream_response(messages):
-    """توليد رد متدفق محسن باستخدام Kimi K2 Thinking"""
+    """Generate optimized stream response"""
     
     system_prompt = {
         "role": "system",
-        "content": """أنت Abdo AI Pro، مساعد ذكي فائق التطور باللغة العربية الفصحى.
+        "content": """You are Abdo AI Pro, a highly advanced intelligent assistant.
 
-القواعد الأساسية:
-1. قدم إجابات دقيقة وشاملة جداً
-2. استخدم اللغة العربية الفصيحة السليمة 100%
-3. للمواضيع البرمجية:
-   - قدم شرحاً مفصلاً مع أمثلة عملية
-   - وضح كل سطر من الكود
-   - اشرح أفضل الممارسات
-4. قسّم الإجابات إلى أقسام منظمة مع عناوين فرعية
-5. استخدم النقاط والقوائم للتوضيح
-6. قدم أمثلة واقعية وحديثة
-7. اشرح المفاهيم الصعبة ببساطة مع تشبيهات
-8. استخدم تنسيق Markdown"""
+Core rules:
+1. Provide accurate and comprehensive answers
+2. Use clear and professional English
+3. For programming topics:
+   - Provide detailed explanations with practical examples
+   - Explain each line of code
+   - Share best practices
+4. Structure answers with clear sections and subheadings
+5. Use bullet points and lists for clarity
+6. Provide real-world examples
+7. Explain complex concepts simply with analogies
+8. Use Markdown formatting"""
     }
     
-    full_messages = [system_prompt] + messages[-50:]  # آخر 50 رسالة للسياق
+    full_messages = [system_prompt] + messages[-50:]
     
     try:
-        # استخدام OpenAI client مع Kimi K2 Thinking
         completion = client.chat.completions.create(
             model=MODEL_NAME,
             messages=full_messages,
@@ -76,40 +74,36 @@ def generate_stream_response(messages):
             stream=True
         )
         
-        reasoning_buffer = ""
-        
         for chunk in completion:
             if not getattr(chunk, "choices", None):
                 continue
             
-            # معالجة المحتوى العادي
             if chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
-                # تحسين عرض الأكواد في الوقت الفعلي
                 if '```' in content:
                     content = optimize_code_response(content)
                 yield content
                 
     except Exception as e:
-        error_msg = f"❌ حدث خطأ: {str(e)}"
+        error_msg = f"❌ Error: {str(e)}"
         print(error_msg)
         yield error_msg
 
 @app.route('/')
 def index():
-    """الصفحة الرئيسية المحسنة"""
+    """Main page"""
     if 'conversation_id' not in session:
         session['conversation_id'] = str(uuid.uuid4())
         conversations[session['conversation_id']] = []
     
     return render_template_string('''
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>Abdo AI Pro - مساعدك الذكي</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Abdo AI Pro - Your Smart Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -137,7 +131,7 @@ def index():
         }
 
         body {
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Inter', sans-serif;
             background: var(--darker);
             color: var(--light);
             height: 100vh;
@@ -271,16 +265,16 @@ def index():
             .sidebar {
                 position: fixed;
                 top: 70px;
-                right: -100%;
+                left: -100%;
                 bottom: 0;
                 width: 280px;
                 z-index: 100;
-                border-radius: 20px 0 0 20px;
-                transition: right 0.3s ease;
+                border-radius: 0 20px 20px 0;
+                transition: left 0.3s ease;
             }
 
             .sidebar.active {
-                right: 0;
+                left: 0;
             }
         }
 
@@ -324,7 +318,7 @@ def index():
         .conversation-item:hover {
             background: var(--glass-hover);
             border-color: var(--primary);
-            transform: translateX(-5px);
+            transform: translateX(5px);
         }
 
         .conversation-item.active {
@@ -464,11 +458,12 @@ def index():
             transform: scale(1.05);
         }
 
-        /* Messages */
+        /* Messages - Fixed ordering */
         .message {
             display: flex;
             gap: 15px;
             animation: slideIn 0.3s ease;
+            width: 100%;
         }
 
         @keyframes slideIn {
@@ -482,7 +477,13 @@ def index():
             }
         }
 
-        .message.user { flex-direction: row-reverse; }
+        .message.user {
+            flex-direction: row;
+        }
+
+        .message.assistant {
+            flex-direction: row;
+        }
 
         .message-avatar {
             width: 45px;
@@ -696,7 +697,7 @@ def index():
             border: none;
             padding: 0.75rem 1.25rem;
             color: white;
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-size: 0.95rem;
             resize: none;
             max-height: 100px;
@@ -802,12 +803,6 @@ def index():
             display: block;
         }
 
-        @media (max-width: 768px) {
-            .sidebar-overlay.active {
-                display: block;
-            }
-        }
-
         /* Toast Notification */
         .toast {
             position: fixed;
@@ -863,7 +858,7 @@ def index():
         .message-text ul,
         .message-text ol {
             margin: 1rem 0;
-            padding-right: 2rem;
+            padding-left: 2rem;
         }
 
         .message-text li {
@@ -873,9 +868,9 @@ def index():
         .message-text blockquote {
             margin: 1rem 0;
             padding: 0.5rem 1rem;
-            border-right: 4px solid var(--primary);
+            border-left: 4px solid var(--primary);
             background: rgba(124, 58, 237, 0.1);
-            border-radius: 0 8px 8px 0;
+            border-radius: 8px 0 0 8px;
         }
 
         .message-text table {
@@ -908,6 +903,10 @@ def index():
                 </div>
                 <span class="brand-text">Abdo AI Pro</span>
             </div>
+            <div class="online-status">
+                <i class="fas fa-circle" style="color: var(--success); font-size: 10px;"></i>
+                Online
+            </div>
         </nav>
 
         <!-- Main Layout -->
@@ -919,7 +918,7 @@ def index():
             <div class="sidebar" id="sidebar">
                 <button class="new-chat-btn" onclick="newConversation()">
                     <i class="fas fa-plus"></i>
-                    محادثة جديدة
+                    New Chat
                 </button>
                 <div class="conversations-list" id="conversationsList"></div>
             </div>
@@ -927,8 +926,7 @@ def index():
             <!-- Chat Area -->
             <div class="chat-area">
                 <div class="chat-header">
-                    <span><i class="fas fa-robot" style="margin-left: 8px;"></i> Abdo AI Pro - مساعدك الشخصي</span>
-                    <span class="online-status"><i class="fas fa-circle" style="color: var(--success); font-size: 10px;"></i> متصل</span>
+                    <span><i class="fas fa-robot" style="margin-right: 8px;"></i> Abdo AI Pro - Your Personal Assistant</span>
                 </div>
 
                 <div class="messages-container" id="messagesContainer">
@@ -938,22 +936,22 @@ def index():
                             <i class="fas fa-robot"></i>
                         </div>
                         <h1>Abdo AI Pro</h1>
-                        <p>مساعدك الذكي للإجابات الدقيقة والشاملة</p>
+                        <p>Your intelligent assistant for accurate and comprehensive answers</p>
                         
                         <div class="suggestions">
-                            <span class="suggestion-chip" onclick="setQuestion('اكتب برنامج بايثون لحساب الأعداد الأولية مع شرح')">
-                                <i class="fas fa-code"></i> برنامج بايثون
+                            <span class="suggestion-chip" onclick="setQuestion('Write a Python program to calculate prime numbers with explanation')">
+                                <i class="fas fa-code"></i> Python Program
                             </span>
-                            <span class="suggestion-chip" onclick="setQuestion('كيف تعمل الشبكات العصبية؟')">
-                                <i class="fas fa-brain"></i> الشبكات العصبية
+                            <span class="suggestion-chip" onclick="setQuestion('How do neural networks work?')">
+                                <i class="fas fa-brain"></i> Neural Networks
                             </span>
-                            <span class="suggestion-chip" onclick="setQuestion('أفضل ممارسات تطوير الويب')">
-                                <i class="fas fa-globe"></i> تطوير الويب
+                            <span class="suggestion-chip" onclick="setQuestion('Best web development practices in 2024')">
+                                <i class="fas fa-globe"></i> Web Development
                             </span>
-                            <span class="suggestion-chip" onclick="setQuestion('شرح خوارزمية البحث الثنائي')">
-                                <i class="fas fa-search"></i> البحث الثنائي
+                            <span class="suggestion-chip" onclick="setQuestion('Explain binary search algorithm with example')">
+                                <i class="fas fa-search"></i> Binary Search
                             </span>
-                            <span class="suggestion-chip" onclick="setQuestion('كيف تبني API باستخدام Flask؟')">
+                            <span class="suggestion-chip" onclick="setQuestion('How to build a REST API with Flask?')">
                                 <i class="fas fa-server"></i> Flask API
                             </span>
                         </div>
@@ -965,7 +963,7 @@ def index():
                     <div class="input-wrapper">
                         <textarea 
                             id="messageInput" 
-                            placeholder="اكتب سؤالك هنا..."
+                            placeholder="Type your question here..."
                             rows="1"
                             oninput="autoResize(this)"
                         ></textarea>
@@ -977,7 +975,7 @@ def index():
                         <div class="typing-indicator" id="typingIndicator"></div>
                         <span>
                             <i class="fas fa-keyboard"></i>
-                            Enter للإرسال
+                            Press Enter to send
                         </span>
                     </div>
                 </div>
@@ -988,7 +986,7 @@ def index():
     <!-- Toast Notification -->
     <div class="toast" id="toast">
         <i class="fas fa-check-circle"></i>
-        <span id="toastMessage">تم النسخ!</span>
+        <span id="toastMessage">Copied!</span>
     </div>
 
     <script>
@@ -996,7 +994,7 @@ def index():
         let isProcessing = false;
         let eventSource = null;
         
-        // تحميل المحادثات من localStorage
+        // Load conversations from localStorage
         function loadLocalConversations() {
             const saved = localStorage.getItem('abdoAIConversations');
             if (saved) {
@@ -1009,34 +1007,33 @@ def index():
             return {};
         }
 
-        // حفظ المحادثات في localStorage
+        // Save conversations to localStorage
         function saveLocalConversations(convs) {
             localStorage.setItem('abdoAIConversations', JSON.stringify(convs));
         }
 
-        // تهيئة المحادثات
+        // Initialize conversations
         let localConversations = loadLocalConversations();
         
-        // دمج مع محادثات الجلسة الحالية
         if (!localConversations[currentConversationId]) {
             localConversations[currentConversationId] = [];
         }
 
-        // تحميل المحادثات
+        // Load conversations list
         function loadConversations() {
             const list = document.getElementById('conversationsList');
             const convs = Object.entries(localConversations)
                 .filter(([_, msgs]) => msgs && msgs.length > 0)
                 .map(([id, msgs]) => ({
                     id,
-                    preview: msgs[0]?.content?.substring(0, 40) + '...' || 'محادثة جديدة',
+                    preview: msgs[0]?.content?.substring(0, 40) + '...' || 'New conversation',
                     timestamp: msgs[0]?.timestamp || new Date().toISOString(),
-                    message_count: msgs.length
+                    message_count: Math.ceil(msgs.length / 2) // Each exchange is 2 messages
                 }))
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
             if (convs.length === 0) {
-                list.innerHTML = '<div style="color: var(--gray); text-align: center; padding: 20px;">لا توجد محادثات سابقة</div>';
+                list.innerHTML = '<div style="color: var(--gray); text-align: center; padding: 20px;">No conversations yet</div>';
                 return;
             }
             
@@ -1047,7 +1044,7 @@ def index():
                 item.onclick = () => loadConversation(conv.id);
                 
                 const date = new Date(conv.timestamp);
-                const timeStr = date.toLocaleString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+                const timeStr = date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' });
                 
                 item.innerHTML = `
                     <div style="font-weight: 500; margin-bottom: 5px;">${escapeHtml(conv.preview)}</div>
@@ -1060,7 +1057,7 @@ def index():
             });
         }
 
-        // تحميل محادثة محددة
+        // Load specific conversation
         function loadConversation(conversationId) {
             currentConversationId = conversationId;
             const msgs = localConversations[conversationId] || [];
@@ -1069,26 +1066,27 @@ def index():
             const container = document.getElementById('messagesContainer');
             container.innerHTML = '';
             
+            // Display messages in correct order (oldest first)
             msgs.forEach(msg => {
                 if (msg.role === 'user') {
-                    displayUserMessage(msg.content);
+                    displayUserMessage(msg.content, false);
                 } else {
-                    displayAssistantMessage(msg.content);
+                    displayAssistantMessage(msg.content, false);
                 }
             });
             
-            // تحديث الحالة النشطة
+            // Update active state
             document.querySelectorAll('.conversation-item').forEach(item => {
                 item.classList.remove('active');
             });
             loadConversations();
             
-            // إغلاق sidebar في الموبايل
+            // Close sidebar on mobile
             if (window.innerWidth <= 768) {
                 toggleSidebar();
             }
             
-            // تطبيق التنسيق على الأكواد
+            // Apply code highlighting
             setTimeout(() => {
                 document.querySelectorAll('pre code').forEach(block => {
                     hljs.highlightElement(block);
@@ -1096,25 +1094,38 @@ def index():
             }, 100);
         }
 
-        // عرض رسالة المستخدم
-        function displayUserMessage(message) {
+        // Display user message
+        function displayUserMessage(message, save = true) {
             const container = document.getElementById('messagesContainer');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message user';
             messageDiv.innerHTML = `
-                <div class="message-content">
-                    <div class="message-text">${escapeHtml(message).replace(/\\n/g, '<br>')}</div>
-                </div>
                 <div class="message-avatar">
                     <i class="fas fa-user"></i>
+                </div>
+                <div class="message-content">
+                    <div class="message-text">${escapeHtml(message).replace(/\\n/g, '<br>')}</div>
                 </div>
             `;
             container.appendChild(messageDiv);
             scrollToBottom();
+            
+            if (save) {
+                // Save to localStorage
+                if (!localConversations[currentConversationId]) {
+                    localConversations[currentConversationId] = [];
+                }
+                localConversations[currentConversationId].push({
+                    role: 'user',
+                    content: message,
+                    timestamp: new Date().toISOString()
+                });
+                saveLocalConversations(localConversations);
+            }
         }
 
-        // عرض رسالة المساعد
-        function displayAssistantMessage(message) {
+        // Display assistant message
+        function displayAssistantMessage(message, save = true) {
             const container = document.getElementById('messagesContainer');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message assistant';
@@ -1129,20 +1140,59 @@ def index():
             `;
             container.appendChild(messageDiv);
             scrollToBottom();
+            
+            if (save) {
+                // Save to localStorage
+                if (!localConversations[currentConversationId]) {
+                    localConversations[currentConversationId] = [];
+                }
+                localConversations[currentConversationId].push({
+                    role: 'assistant',
+                    content: message,
+                    timestamp: new Date().toISOString()
+                });
+                saveLocalConversations(localConversations);
+                loadConversations();
+            }
+            
+            // Apply code highlighting
+            setTimeout(() => {
+                messageDiv.querySelectorAll('pre code').forEach(block => {
+                    hljs.highlightElement(block);
+                });
+            }, 100);
         }
 
-        // تنسيق الرسالة مع دعم الأكواد
+        // Format message with code blocks
         function formatMessage(message) {
-            // تحويل الروابط
+            // Convert URLs to links
             message = message.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: var(--primary);">$1</a>');
             
-            // تحويل النقاط والقوائم
-            message = message.replace(/^[-*]\s(.+)$/gm, '<li>$1</li>');
+            // Handle code blocks
+            if (message.includes('```')) {
+                const parts = message.split('```');
+                for (let i = 1; i < parts.length; i += 2) {
+                    const langMatch = parts[i].match(/^(\\w+)\\n/);
+                    const lang = langMatch ? langMatch[1] : 'text';
+                    const code = langMatch ? parts[i].substring(lang.length + 1) : parts[i];
+                    
+                    parts[i] = `<div class="code-block-wrapper">
+                        <div class="code-header">
+                            <span class="code-language">${lang}</span>
+                            <button class="copy-code-btn" onclick="copyCode(this)">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-${lang}">${escapeHtml(code.trim())}</code></pre>
+                    </div>`;
+                }
+                message = parts.join('');
+            }
             
             return message.replace(/\\n/g, '<br>');
         }
 
-        // عرض مؤشر التحميل
+        // Show loading indicator
         function showLoading() {
             const container = document.getElementById('messagesContainer');
             const loadingDiv = document.createElement('div');
@@ -1164,7 +1214,7 @@ def index():
             scrollToBottom();
         }
 
-        // عرض رسالة خطأ
+        // Show error message
         function showError(message) {
             const container = document.getElementById('messagesContainer');
             const errorDiv = document.createElement('div');
@@ -1184,27 +1234,27 @@ def index():
             scrollToBottom();
         }
 
-        // نسخ الكود
+        // Copy code to clipboard
         function copyCode(btn) {
             const codeBlock = btn.closest('.code-block-wrapper').querySelector('code');
             const code = codeBlock.textContent;
             
             navigator.clipboard.writeText(code).then(() => {
                 btn.classList.add('copied');
-                btn.innerHTML = '<i class="fas fa-check"></i> تم النسخ!';
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
                 
-                showToast('تم نسخ الكود بنجاح', 'success');
+                showToast('Code copied successfully', 'success');
                 
                 setTimeout(() => {
                     btn.classList.remove('copied');
-                    btn.innerHTML = '<i class="fas fa-copy"></i> نسخ';
+                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
                 }, 2000);
             }).catch(() => {
-                showToast('فشل نسخ الكود', 'error');
+                showToast('Failed to copy code', 'error');
             });
         }
 
-        // عرض toast notification
+        // Show toast notification
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toastMessage');
@@ -1219,7 +1269,7 @@ def index():
             }, 3000);
         }
 
-        // إرسال رسالة مع Streaming
+        // Send message with streaming
         function sendMessage() {
             if (isProcessing) return;
             
@@ -1227,37 +1277,26 @@ def index():
             const message = input.value.trim();
             
             if (!message) {
-                showToast('الرجاء إدخال رسالة', 'error');
+                showToast('Please enter a message', 'error');
                 return;
             }
             
             isProcessing = true;
             document.getElementById('sendBtn').disabled = true;
-            document.getElementById('typingIndicator').innerHTML = '<i class="fas fa-spinner fa-pulse"></i> جاري التفكير...';
+            document.getElementById('typingIndicator').innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Thinking...';
             
             document.getElementById('welcomeMessage').style.display = 'none';
-            displayUserMessage(message);
+            
+            // Display user message immediately and save
+            displayUserMessage(message, true);
             
             input.value = '';
             autoResize(input);
             
-            // إظهار مؤشر التحميل
+            // Show loading indicator
             showLoading();
             
-            // حفظ رسالة المستخدم محلياً
-            if (!localConversations[currentConversationId]) {
-                localConversations[currentConversationId] = [];
-            }
-            
-            localConversations[currentConversationId].push({
-                role: 'user',
-                content: message,
-                timestamp: new Date().toISOString()
-            });
-            
-            saveLocalConversations(localConversations);
-            
-            // استخدام EventSource للـ streaming
+            // Close any existing event source
             if (eventSource) {
                 eventSource.close();
             }
@@ -1266,11 +1305,12 @@ def index():
             
             let fullResponse = '';
             let messageDiv = null;
+            let responseText = null;
             
             eventSource.onmessage = function(e) {
                 const data = JSON.parse(e.data);
                 
-                // إزالة مؤشر التحميل
+                // Remove loading indicator
                 document.getElementById('loadingMessage')?.remove();
                 
                 if (data.error) {
@@ -1283,7 +1323,7 @@ def index():
                 }
                 
                 if (data.chunk) {
-                    // إنشاء رسالة جديدة إذا لم تكن موجودة
+                    // Create message div if not exists
                     if (!messageDiv) {
                         const container = document.getElementById('messagesContainer');
                         messageDiv = document.createElement('div');
@@ -1297,39 +1337,13 @@ def index():
                             </div>
                         `;
                         container.appendChild(messageDiv);
+                        responseText = document.getElementById('responseText');
                     }
                     
                     fullResponse += data.chunk;
                     
-                    // تحسين عرض الأكواد
-                    let formattedResponse = fullResponse;
-                    if (formattedResponse.includes('```')) {
-                        // معالجة كتل الأكواد
-                        const parts = formattedResponse.split('```');
-                        for (let i = 1; i < parts.length; i += 2) {
-                            const lang = parts[i].split('\\n')[0];
-                            const code = parts[i].substring(lang.length).trim();
-                            parts[i] = `<div class="code-block-wrapper">
-                                <div class="code-header">
-                                    <span class="code-language">${lang || 'text'}</span>
-                                    <button class="copy-code-btn" onclick="copyCode(this)">
-                                        <i class="fas fa-copy"></i> نسخ
-                                    </button>
-                                </div>
-                                <pre><code class="language-${lang}">${escapeHtml(code)}</code></pre>
-                            </div>`;
-                        }
-                        formattedResponse = parts.join('');
-                    }
-                    
-                    const responseText = document.getElementById('responseText');
                     if (responseText) {
-                        responseText.innerHTML = formattedResponse;
-                        
-                        // تطبيق التنسيق على الأكواد
-                        responseText.querySelectorAll('pre code').forEach(block => {
-                            hljs.highlightElement(block);
-                        });
+                        responseText.innerHTML = formatMessage(fullResponse);
                     }
                     
                     scrollToBottom();
@@ -1337,36 +1351,35 @@ def index():
                 
                 if (data.done) {
                     eventSource.close();
+                    
+                    // Save assistant message
+                    displayAssistantMessage(fullResponse, true);
+                    
+                    // Remove the temporary message div
+                    if (messageDiv) {
+                        messageDiv.remove();
+                    }
+                    
                     isProcessing = false;
                     document.getElementById('sendBtn').disabled = false;
                     document.getElementById('typingIndicator').innerHTML = '';
                     
-                    // حفظ رد المساعد
-                    localConversations[currentConversationId].push({
-                        role: 'assistant',
-                        content: fullResponse,
-                        timestamp: new Date().toISOString()
-                    });
-                    
-                    saveLocalConversations(localConversations);
-                    loadConversations();
-                    
-                    showToast('تم استلام الرد بنجاح', 'success');
+                    showToast('Response received', 'success');
                 }
             };
             
             eventSource.onerror = function() {
                 eventSource.close();
                 document.getElementById('loadingMessage')?.remove();
-                showError('انقطع الاتصال بالخادم');
+                showError('Connection lost');
                 isProcessing = false;
                 document.getElementById('sendBtn').disabled = false;
                 document.getElementById('typingIndicator').innerHTML = '';
-                showToast('حدث خطأ في الاتصال', 'error');
+                showToast('Connection error', 'error');
             };
         }
 
-        // محادثة جديدة
+        // New conversation
         function newConversation() {
             if (eventSource) {
                 eventSource.close();
@@ -1384,31 +1397,31 @@ def index():
                         document.getElementById('welcomeMessage').style.display = 'block';
                         loadConversations();
                         
-                        showToast('تم بدء محادثة جديدة', 'success');
+                        showToast('New conversation started', 'success');
                     }
                 });
         }
 
-        // تعيين سؤال
+        // Set question from suggestion
         function setQuestion(question) {
             document.getElementById('messageInput').value = question;
             document.getElementById('messageInput').focus();
             autoResize(document.getElementById('messageInput'));
         }
 
-        // تغيير حجم textarea
+        // Auto resize textarea
         function autoResize(textarea) {
             textarea.style.height = 'auto';
             textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
         }
 
-        // التمرير للأسفل
+        // Scroll to bottom
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
             container.scrollTop = container.scrollHeight;
         }
 
-        // تبديل sidebar في الموبايل
+        // Toggle sidebar on mobile
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -1424,7 +1437,7 @@ def index():
             return div.innerHTML;
         }
 
-        // Enter للإرسال
+        // Enter to send
         document.getElementById('messageInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -1432,15 +1445,15 @@ def index():
             }
         });
 
-        // تحميل المحادثات عند بدء التشغيل
+        // Load conversations on startup
         loadConversations();
         
-        // تحميل المحادثة الحالية
+        // Load current conversation if exists
         if (localConversations[currentConversationId]?.length > 0) {
             loadConversation(currentConversationId);
         }
 
-        // تحديث حجم الشاشة
+        // Handle window resize
         window.addEventListener('resize', function() {
             if (window.innerWidth > 768) {
                 document.getElementById('sidebar').classList.remove('active');
@@ -1448,12 +1461,10 @@ def index():
             }
         });
         
-        // منع إغلاق الاتصال عند التبديل بين التطبيقات
+        // Handle visibility change
         document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                if (eventSource) {
-                    eventSource.close();
-                }
+            if (document.hidden && eventSource) {
+                eventSource.close();
             }
         });
     </script>
@@ -1463,23 +1474,23 @@ def index():
 
 @app.route('/api/chat/stream')
 def chat_stream():
-    """نقطة نهاية للمحادثة المتدفقة"""
+    """Streaming chat endpoint"""
     message = request.args.get('message', '').strip()
     conversation_id = request.args.get('conversation_id') or session.get('conversation_id')
     
     if not message:
-        return jsonify({'error': 'الرجاء إدخال رسالة'}), 400
+        return jsonify({'error': 'Please enter a message'}), 400
     
     def generate():
         try:
-            # تحضير الرسائل للنموذج
+            # Prepare messages for the model
             messages_for_api = [
                 {'role': 'user', 'content': message}
             ]
             
             full_response = ""
             
-            # توليد الرد المتدفق
+            # Generate streaming response
             for chunk in generate_stream_response(messages_for_api):
                 if chunk:
                     full_response += chunk
@@ -1489,7 +1500,7 @@ def chat_stream():
             
         except Exception as e:
             error_msg = str(e)
-            print(f"خطأ في الـ streaming: {error_msg}")
+            print(f"Streaming error: {error_msg}")
             yield f"data: {json.dumps({'error': error_msg})}\n\n"
     
     response = Response(generate(), mimetype='text/event-stream')
@@ -1499,7 +1510,7 @@ def chat_stream():
 
 @app.route('/api/conversations', methods=['POST'])
 def create_conversation():
-    """إنشاء محادثة جديدة"""
+    """Create new conversation"""
     new_id = str(uuid.uuid4())
     conversations[new_id] = []
     session['conversation_id'] = new_id
@@ -1507,23 +1518,23 @@ def create_conversation():
 
 @app.route('/api/conversation/<conversation_id>', methods=['GET'])
 def get_conversation(conversation_id):
-    """استرجاع محادثة محددة"""
+    """Get specific conversation"""
     if conversation_id in conversations:
         return jsonify({'messages': conversations[conversation_id]})
     return jsonify({'messages': []})
 
 if __name__ == '__main__':
     print("="*80)
-    print("🚀 Abdo AI Pro - مساعدك الذكي")
+    print("🚀 Abdo AI Pro - Your Smart Assistant")
     print("="*80)
-    print(f"📡 الخادم: http://localhost:5000")
-    print(f"🤖 النموذج: AI Pro Assistant")
-    print(f"🔑 مفتاح API: ✓ نشط")
-    print(f"⚡ الميزات: Streaming | حفظ محلي | نسخ الأكواد")
+    print(f"📡 Server: http://localhost:5000")
+    print(f"🤖 Model: AI Pro Assistant")
+    print(f"🔑 API Key: ✓ Active")
+    print(f"⚡ Features: Streaming | Local Storage | Code Copy")
     print("="*80)
-    print("✅ افتح المتصفح على: http://localhost:5000")
+    print("✅ Open browser at: http://localhost:5000")
     print("="*80)
     
-    # للإنتاج على Render/Replit
+    # For production on Render/Replit
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
